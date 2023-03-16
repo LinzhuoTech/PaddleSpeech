@@ -15,29 +15,15 @@ using namespace paddle::lite_api;
 
 DEFINE_string(sentence, "你好，欢迎使用语音合成服务", "Text to be synthesized (Chinese only. English will crash the program.)");
 DEFINE_string(front_conf, "./front.conf", "Front configuration file");
-DEFINE_string(acoustic_model, "./models/cpu/fastspeech2_csmsc_arm.nb", "Acoustic model .nb file");
+DEFINE_string(acoustic_model, "./models/cpu/fastspeech2_mix_static_0.2.0.nb", "Acoustic model .nb file");
 DEFINE_string(phone_id_data_type, "int64", "Input 0 data type of acoustic model: int32, int64 or float");
-DEFINE_string(speaker_ids, "", "Comma-separated speaker ids (Example: \"1,2,3\". Leave blank if the model does not have this parameter. Parameters that do not match the model may crash the program.)");
+DEFINE_string(speaker_id, "1", "Speaker id (A number: 0, 1, 2... Leave blank if the model does not have this parameter or the program may crash.)");
 DEFINE_string(speaker_id_data_type, "int64", "Input 1 data type of acoustic model: int32, int64 or float");
-DEFINE_string(vocoder, "./models/cpu/mb_melgan_csmsc_arm.nb", "vocoder .nb file");
+DEFINE_string(vocoder, "./models/cpu/mb_melgan_csmsc_static_0.1.1.nb", "vocoder .nb file");
 DEFINE_string(output_wav, "./output/tts.wav", "Output WAV file");
 DEFINE_string(wav_bit_depth, "16", "WAV bit depth, 16 (16-bit PCM) or 32 (32-bit IEEE float)");
 DEFINE_string(wav_sample_rate, "24000", "WAV sample rate, should match the output of the vocoder");
 DEFINE_string(cpu_thread, "1", "CPU thread numbers");
-
-template <typename T>
-std::vector<T> splitStringToInts(const std::string &input, char delimiter) {
-    std::istringstream iss(input);
-    std::vector<T> result;
-    std::string token;
-
-    while (std::getline(iss, token, delimiter)) {
-        T value = std::stoi(token);
-        result.push_back(value);
-    }
-
-    return result;
-}
 
 template <typename T>
 std::vector<T> vectorT(const std::vector<int32_t> input) {
@@ -46,6 +32,13 @@ std::vector<T> vectorT(const std::vector<int32_t> input) {
         return static_cast<T>(x);
     });
     return output;
+}
+
+std::string toLower(const std::string& str) {
+    std::string result = str;
+    std::transform(result.begin(), result.end(), result.begin(), 
+                   [](unsigned char c){ return std::tolower(c); });
+    return result;
 }
 
 int main(int argc, char *argv[]) {
@@ -77,7 +70,11 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    std::wstring ws_sentence = ppspeech::utf8string2wstring(FLAGS_sentence);
+    // 英文大写转小写
+    std::string sentence = toLower(FLAGS_sentence);
+
+    // 转UTF-32
+    std::wstring ws_sentence = ppspeech::utf8string2wstring(sentence);
 
     // 繁体转简体
     std::wstring sentence_simp;
@@ -145,8 +142,8 @@ int main(int argc, char *argv[]) {
     }
 
     // 说话者id，如果为空则不设置（有的模型可能没有该参数）
-    if (!FLAGS_speaker_ids.empty()) {
-        std::vector<int32_t> speakerIds = splitStringToInts<int32_t>(FLAGS_speaker_ids, ',');
+    if (!FLAGS_speaker_id.empty()) {
+        std::vector<int32_t> speakerIds = {std::stoi(FLAGS_speaker_id)};
 
         // 模型可能要求使用不同类型的传入参数
         if (FLAGS_speaker_id_data_type == "int32") {

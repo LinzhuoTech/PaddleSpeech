@@ -1,3 +1,5 @@
+#include <absl/strings/ascii.h>
+#include <absl/algorithm/container.h>
 #include "front/front_interface.h"
 
 namespace ppspeech {
@@ -15,8 +17,8 @@ int FrontEngineInterface::init() {
                                  _jieba_idf_path, _jieba_stop_word_path);
 
     _punc = {"，", "。", "、", "？", "：", "；", "~", "！", 
-             ",", ".", "?", "!", ":", ";", "/", "\\"};
-    _punc_omit = {"“",  "”", "\"", "\""};
+             ",", ".", "?", "!", ":", ";", "/", "\\", "\r", "\n"};
+    _punc_omit = {"“",  "”", "'", "\"", " "};
 
     // 需要儿化音处理的词语
     must_erhua = {"小院儿", "胡同儿", "范儿", "老汉儿", "撒欢儿", "寻老礼儿", "妥妥儿"};
@@ -99,12 +101,30 @@ int FrontEngineInterface::init() {
         return -1;
     }
 
+    // 发声校验单词
+    if (0 != GenDict(_orderdict_path, orderdict_map, '\t')) {
+        LOG(ERROR) << "Genarate cmu_map dict failed";
+        return -1;
+    }
+
+    // 单词cmu发声
+    if (0 != GenDict(_cmu_path, cmu_map, '\t')) {
+        LOG(ERROR) << "Genarate cmu_map dict failed";
+        return -1;
+    }
+
+    // 单词homograph2features发声
+    if (0 != GenDict(_homograph2features_path, homograph2features_map, '\t')) {
+        LOG(ERROR) << "Genarate cmu_map dict failed";
+        return -1;
+    }
+
     _initialed = true;
     return 0;
 }
 
 int FrontEngineInterface::ReadConfFile() {
-    std::ifstream is(_conf_file.c_str(), std::ifstream::in);
+    std::ifstream is(_conf_file, std::ifstream::in);
     if (!is.good()) {
         LOG(ERROR) << "Cannot open config file: " << _conf_file;
         return -1;
@@ -134,6 +154,10 @@ int FrontEngineInterface::ReadConfFile() {
     _tone2id_path = conf_map["tone2id_path"];
     _trand2simp_path = conf_map["trand2simpd_path"];
 
+   _cmu_path = conf_map["cmu_path"];
+   _homograph2features_path = conf_map["homograph2features_path"];
+   _orderdict_path = conf_map["orderdict_path"];
+
     return 0;
 }
 
@@ -153,7 +177,7 @@ int FrontEngineInterface::Trand2Simp(const std::wstring &sentence, std::wstring 
     return 0;
 }
 
-int FrontEngineInterface::GenDict(const std::string &dict_file, std::map<std::string, std::string> &map) {
+int FrontEngineInterface::GenDict(const std::string &dict_file, std::map<std::string, std::string> &map, char separator) {
     std::ifstream is(dict_file.c_str(), std::ifstream::in);
     if (!is.good()) {
         LOG(ERROR) << "Cannot open dict file: " << dict_file;
@@ -161,7 +185,7 @@ int FrontEngineInterface::GenDict(const std::string &dict_file, std::map<std::st
     }
     std::string line, key, value;
     while (std::getline(is, line)) {
-        size_t pos = line.find_first_of(" ", 0);
+        size_t pos = line.find_first_of(separator);
         key = line.substr(0, pos);
         value = line.substr(pos + 1);    
         map[key] = value; 
@@ -202,7 +226,49 @@ int FrontEngineInterface::GetWordsIds(const std::vector<std::pair<std::string, s
     for(int i = 0; i < cut_result.size(); i++) {
         word = cut_result[i].first;
         pos = cut_result[i].second;
-        if (std::find(_punc_omit.begin(), _punc_omit.end(), word) == _punc_omit.end()) { // 非可忽略的标点
+        if (pos == "eng") { // english
+            std::string result;
+            std::vector<std::string> word_final;
+
+            absl::StripAsciiWhitespace(&word); // 去除英文开头结尾附带的空格
+
+            auto iter = homograph2features_map.find(word);
+            if (iter == homograph2features_map.end()) {
+                iter = cmu_map.find(word);
+            }
+            if (iter == cmu_map.end()) {
+                // 不在词典中，念出每个字母
+                for (size_t i=0; i<word.size(); i++) {
+                    std::string letter = word.substr(i, 1);
+                    auto phoneIter = homograph2features_map.find(letter);
+                    if (phoneIter == homograph2features_map.end()) {
+                        phoneIter = cmu_map.find(letter);
+                    }
+                    if (phoneIter == cmu_map.end()) {
+                        LOG(ERROR) << "Cannot find phone of the letter " << letter;
+                        continue;
+                    }
+                    std::vector<std::string> word_one = absl::StrSplit(phoneIter->second, '|');
+                    word_one = absl::StrSplit(word_one[0], ',');
+                    word_final.insert(word_final.end(), word_one.begin(), word_one.end());
+                }
+            } else {
+                // 在词典中，寻找对应发音
+                std::vector<std::string> word_one = absl::StrSplit(iter->second, '|');
+                word_final = absl::StrSplit(word_one[0], ',');
+            }
+
+            for (size_t i = 0; i < word_final.size(); i++) {
+                phone = word_final[i];
+                if (orderdict_map[phone].size() > 0) {
+                    // 音素到音素id
+                    if (0 != Phone2Phoneid(phone, phoneids, toneids)) {
+                        LOG(ERROR) << "Genarate the phone id of " << word << " failed";
+                        continue;
+                    }
+                }
+            }
+        } else if (std::find(_punc_omit.begin(), _punc_omit.end(), word) == _punc_omit.end()) { // 非可忽略的标点
             word_initials = {};
             word_finals = {};
             phone = "";
@@ -292,7 +358,7 @@ int FrontEngineInterface::GetPhone(const std::string &word, std::string &phone) 
 
 int FrontEngineInterface::Phone2Phoneid(const std::string &phone, std::vector<int> &phoneid, std::vector<int> &toneid) {
     std::vector<std::string> phone_vec;
-    phone_vec = absl::StrSplit(phone, " ");
+    phone_vec = absl::StrSplit(phone, ' ');
     std::string temp_phone;
     for(int i = 0; i < phone_vec.size(); i++) {
         temp_phone = phone_vec[i];
@@ -336,7 +402,7 @@ bool FrontEngineInterface::IsReduplication(const std::string &word) {
 int FrontEngineInterface::GetInitialsFinals(const std::string &word, std::vector<std::string> &word_initials, std::vector<std::string> &word_finals) {
     std::string phone; 
     GetPhone(word, phone); //获取字词对应的音素
-    std::vector<std::string> phone_vec = absl::StrSplit(phone, " ");
+    std::vector<std::string> phone_vec = absl::StrSplit(phone, ' ');
     //获取韵母，每个字的音素有1或者2个，start为单个字音素的起始位置。
     int start = 0; 
     while(start < phone_vec.size()) {
@@ -508,7 +574,7 @@ std::vector<std::pair<std::string, std::string>> FrontEngineInterface::MergeThre
         word_final = {};
         word = seg_result[i].first;
         pos = seg_result[i].second;
-        if(std::find(_punc_omit.begin(), _punc_omit.end(), word) == _punc_omit.end()) { // 非可忽略的标点，即文字
+        if(pos != "eng" && std::find(_punc_omit.begin(), _punc_omit.end(), word) == _punc_omit.end()) { // 非可忽略的标点，即文字
             if(0 != GetFinals(word, word_final)) {
                 LOG(ERROR) << "Failed to get the final of word.";
             }
@@ -522,7 +588,9 @@ std::vector<std::pair<std::string, std::string>> FrontEngineInterface::MergeThre
     for(int i = 0; i < word_num; i++) {
         word = seg_result[i].first;
         pos = seg_result[i].second;
-        if(i - 1 >= 0 && AllToneThree(finals[i - 1]) && AllToneThree(finals[i]) && !merge_last[i - 1]) {
+        if (pos == "eng") {
+            result.push_back(seg_result[i]);
+        } else if(i - 1 >= 0 && AllToneThree(finals[i - 1]) && AllToneThree(finals[i]) && !merge_last[i - 1]) {
             // if the last word is reduplication, not merge, because reduplication need to be _neural_sandhi
             if(!IsReduplication(seg_result[i - 1].first) && 
                (ppspeech::utf8string2wstring(seg_result[i - 1].first)).length() + (ppspeech::utf8string2wstring(word)).length() <= 3) {
@@ -565,7 +633,7 @@ std::vector<std::pair<std::string, std::string>> FrontEngineInterface::MergeThre
         word = seg_result[i].first;
         pos = seg_result[i].second;
         // 如果是文字，则获取韵母，如果是可忽略的标点，例如引号，则跳过
-        if(std::find(_punc_omit.begin(), _punc_omit.end(), word) == _punc_omit.end()) { 
+        if(pos != "eng" && std::find(_punc_omit.begin(), _punc_omit.end(), word) == _punc_omit.end()) { 
             if(0 != GetFinals(word, word_final)) {
                 LOG(ERROR) << "Failed to get the final of word.";
             }
@@ -579,7 +647,9 @@ std::vector<std::pair<std::string, std::string>> FrontEngineInterface::MergeThre
     for(int i = 0; i < word_num; i++) {
         word = seg_result[i].first;
         pos = seg_result[i].second;
-        if(i - 1 >= 0 && !finals[i - 1].empty() && absl::EndsWith(finals[i - 1].back(), "3") == true && 
+        if (pos == "eng") {
+            result.push_back(seg_result[i]);
+        } else if(i - 1 >= 0 && !finals[i - 1].empty() && absl::EndsWith(finals[i - 1].back(), "3") == true && 
            !finals[i].empty() && absl::EndsWith(finals[i].front(), "3") == true && !merge_last[i - 1]) {
             // if the last word is reduplication, not merge, because reduplication need to be _neural_sandhi
             if(!IsReduplication(seg_result[i - 1].first) && 

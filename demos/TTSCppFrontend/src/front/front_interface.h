@@ -16,7 +16,7 @@ namespace ppspeech {
     
     class FrontEngineInterface : public TextNormalizer{
         public:
-            FrontEngineInterface(std::string conf) : _conf_file(conf) {
+           explicit FrontEngineInterface(std::string conf) : _conf_file(conf) {
                 TextNormalizer();
                 _jieba = nullptr;
                 _initialed = false;
@@ -35,7 +35,7 @@ namespace ppspeech {
             int Trand2Simp(const std::wstring &sentence, std::wstring &sentence_simp);
 
             // 生成字典
-            int GenDict(const std::string &file, std::map<std::string, std::string> &map);
+            int GenDict(const std::string &file, std::map<std::string, std::string> &map, char separator = ' ');
 
             // 由 词+词性的分词结果转为仅包含词的结果
             int GetSegResult(std::vector<std::pair<std::string, std::string>> &seg, std::vector<std::string> &seg_words);
@@ -129,6 +129,9 @@ namespace ppspeech {
             std::map<std::string, std::string> phone_id_map;
             std::map<std::string, std::string> tone_id_map;
             std::map<std::string, std::string> trand_simp_map;
+            std::map<std::string, std::string> cmu_map;
+            std::map<std::string, std::string> homograph2features_map;
+            std::map<std::string, std::string> orderdict_map;
 
 
             std::string _jieba_dict_path;
@@ -142,6 +145,10 @@ namespace ppspeech {
             std::string _phone2id_path;
             std::string _tone2id_path;
             std::string _trand2simp_path;
+
+            std::string _cmu_path;
+            std::string _homograph2features_path;
+            std::string _orderdict_path;
 
             std::vector<std::string> must_erhua;
             std::vector<std::string> not_erhua;

@@ -144,7 +144,7 @@ std::string TextNormalizer::MultiDigit2Text(const std::wstring &num, bool alt_on
 std::string TextNormalizer::Digits2Text(const std::string &num_str) {
     std::string text;
     std::vector<std::string> integer_decimal;
-    integer_decimal = absl::StrSplit(num_str, ".");
+    integer_decimal = absl::StrSplit(num_str, '.');
     
     if(integer_decimal.size() == 1) {  // 整数
         text = MultiDigit2Text(integer_decimal[0]);
@@ -296,7 +296,7 @@ int TextNormalizer::ReMobilePhone(std::wstring &sentence) {
     std::vector<std::string> country_phonenum;
 
     while (std::regex_search (sentence, match, reg)) {
-        country_phonenum = absl::StrSplit(wstring2utf8string(match[0]), "+");
+        country_phonenum = absl::StrSplit(wstring2utf8string(match[0]), '+');
         rep = "";
         for(int i = 0; i < country_phonenum.size(); i++) {
             LOG(INFO) << country_phonenum[i];
@@ -318,7 +318,7 @@ int TextNormalizer::RePhone(std::wstring &sentence) {
 
     while (std::regex_search (sentence, match, reg)) {
         rep = "";
-        zone_phonenum = absl::StrSplit(wstring2utf8string(match[0]), "-");
+        zone_phonenum = absl::StrSplit(wstring2utf8string(match[0]), '-');
         for(int i = 0; i < zone_phonenum.size(); i ++) {
             rep += SingleDigit2Text(zone_phonenum[i], true);
         }

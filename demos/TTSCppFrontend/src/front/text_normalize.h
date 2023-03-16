@@ -14,7 +14,7 @@ namespace ppspeech {
 
 class TextNormalizer {
 public:
-    TextNormalizer() {
+    explicit TextNormalizer() {
         InitMap();
     }
     ~TextNormalizer() {
