@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
     const PowerMode cpuPowerMode = PowerMode::LITE_POWER_HIGH;
 
     if (!predictor->Init(FLAGS_acoustic_model, FLAGS_vocoder, cpuPowerMode, cpuThreadNum, wavSampleRate)) {
-        LOG(ERROR) << "predictor init failed" << std::endl;
+        LOG(ERROR) << "predictor init failed";
         return -1;
     }
 
@@ -159,17 +159,17 @@ int main(int argc, char *argv[]) {
     }
 
     if (!predictor->RunModel()) {
-        LOG(ERROR) << "predictor run model failed" << std::endl;
+        LOG(ERROR) << "predictor run model failed";
         return -1;
     }
 
     LOG(INFO) << "Inference time: " << predictor->GetInferenceTime() << " ms, "
               << "WAV size (without header): " << predictor->GetWavSize() << " bytes, "
               << "WAV duration: " << predictor->GetWavDuration() << " ms, "
-              << "RTF: " << predictor->GetRTF() << std::endl;
+              << "RTF: " << predictor->GetRTF();
 
     if (!predictor->WriteWavToFile(FLAGS_output_wav)) {
-        LOG(ERROR) << "write wav file failed" << std::endl;
+        LOG(ERROR) << "write wav file failed";
         return -1;
     }
 
