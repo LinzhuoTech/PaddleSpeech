@@ -11,6 +11,7 @@ using namespace paddle::lite_api;
 
 class PredictorInterface {
 public:
+    virtual ~PredictorInterface() = 0;
     virtual bool Init(
             const std::string &AcousticModelPath,
             const std::string &VocoderPath,
@@ -22,22 +23,38 @@ public:
             uint32_t wavSampleRate
     ) = 0;
     virtual std::shared_ptr<PaddlePredictor> LoadModel(const std::string &modelPath, int cpuThreadNum, PowerMode cpuPowerMode) = 0;
+    virtual bool IsLoaded() = 0;
     virtual void ReleaseModel() = 0;
-    virtual bool RunModel(const std::vector<int64_t> &phones) = 0;
-    virtual std::unique_ptr<const Tensor> GetAcousticModelOutput(const std::vector<int64_t> &phones) = 0;
-    virtual std::unique_ptr<const Tensor> GetVocoderOutput(std::unique_ptr<const Tensor> &&amOutput) = 0;
+
+    // 输入不同类型的模型参数
+    virtual void SetAcousticModelInput(int index, const std::vector<int32_t> &data) = 0;
+    virtual void SetAcousticModelInput(int index, const std::vector<int64_t> &data) = 0;
+    virtual void SetAcousticModelInput(int index, const std::vector<float> &data) = 0;
+    virtual void SetAcousticModelInput(int index, const std::vector<int8_t> &data) = 0;
+    virtual void SetAcousticModelInput(int index, const std::vector<uint8_t> &data) = 0;
+
+    // 运行模型、生成WAV并计算用时
+    virtual bool RunModel() = 0;
+
+    // 供想手动控制模型运行流程的用户使用
+    virtual std::unique_ptr<const Tensor> RunAcousticModel() = 0;
+    virtual void SetVocoderInput(std::unique_ptr<const Tensor> &&amOutput) = 0;
+    virtual std::unique_ptr<const Tensor> RunVocoder() = 0;
     virtual void VocoderOutputToWav(std::unique_ptr<const Tensor> &&vocOutput) = 0;
     virtual void SaveFloatWav(float *floatWav, int64_t size) = 0;
-    virtual bool IsLoaded() = 0;
+
     virtual float GetInferenceTime() = 0;
+    virtual float GetRTF() = 0;
+
     virtual int GetWavSize() = 0;
     // 获取WAV持续时间（单位：毫秒）
     virtual float GetWavDuration() = 0;
     // 获取RTF（合成时间 / 音频时长）
-    virtual float GetRTF() = 0;
-    virtual void ReleaseWav() = 0;
     virtual bool WriteWavToFile(const std::string &wavPath) = 0;
+    virtual void ReleaseWav() = 0;
 };
+
+PredictorInterface::~PredictorInterface() {}
 
 // WavDataType: WAV数据类型
 // 可在 int16_t 和 float 之间切换，
@@ -91,36 +108,58 @@ public:
         return CreatePaddlePredictor<MobileConfig>(config);
     }
 
+    virtual bool IsLoaded() override {
+        return acoustic_model_predictor_ != nullptr && vocoder_predictor_ != nullptr;
+    }
+
     virtual void ReleaseModel() override {
         acoustic_model_predictor_ = nullptr;
         vocoder_predictor_ = nullptr;
     }
 
-    virtual bool RunModel(const std::vector<int64_t> &phones) override {
-        if (!IsLoaded()) {
-            return false;
-        }
+    template<typename InputType>
+    void SetAcousticModelInputT(int index, const std::vector<InputType> &data) {
+        auto handle = acoustic_model_predictor_->GetInput(index);
+        handle->Resize({static_cast<int64_t>(data.size())});
+        handle->CopyFromCpu(data.data());
+    }
 
+#define Predictor_SetAcousticModelInput(InputType) \
+    virtual void SetAcousticModelInput(int index, const std::vector<InputType> &data) override { \
+        SetAcousticModelInputT<InputType>(index, data); \
+    }
+
+    Predictor_SetAcousticModelInput(int32_t)
+    Predictor_SetAcousticModelInput(int64_t)
+    Predictor_SetAcousticModelInput(float)
+    Predictor_SetAcousticModelInput(int8_t)
+    Predictor_SetAcousticModelInput(uint8_t)
+
+#undef Predictor_SetAcousticModelInput
+
+    bool RunModel() override {
         // 计时开始
         auto start = std::chrono::system_clock::now();
 
         // 执行推理
-        VocoderOutputToWav(GetVocoderOutput(GetAcousticModelOutput(phones)));
+        auto amOutput = RunAcousticModel();
+        SetVocoderInput(std::move(amOutput));
+        auto vocOutput = RunVocoder();
 
         // 计时结束
         auto end = std::chrono::system_clock::now();
 
-        // 计算用时
+        // 计算用时（不包括输入和输出时间）
         std::chrono::duration<float> duration = end - start;
-        inference_time_ = duration.count() * 1000; // 单位：毫秒
+        inference_time_ = duration.count() * 1000.0f; // 单位：毫秒
+
+        // 输出转WAV
+        VocoderOutputToWav(std::move(vocOutput));
 
         return true;
     }
 
-    virtual std::unique_ptr<const Tensor> GetAcousticModelOutput(const std::vector<int64_t> &phones) override {
-        auto phones_handle = acoustic_model_predictor_->GetInput(0);
-        phones_handle->Resize({static_cast<int64_t>(phones.size())});
-        phones_handle->CopyFromCpu(phones.data());
+    std::unique_ptr<const Tensor> RunAcousticModel() override {
         acoustic_model_predictor_->Run();
 
         // 获取输出Tensor
@@ -136,13 +175,16 @@ public:
         return am_output_handle;
     }
 
-    virtual std::unique_ptr<const Tensor> GetVocoderOutput(std::unique_ptr<const Tensor> &&amOutput) override {
+    virtual void SetVocoderInput(std::unique_ptr<const Tensor> &&amOutput) override {
         auto mel_handle = vocoder_predictor_->GetInput(0);
         // [?, 80]
         auto dims = amOutput->shape();
         mel_handle->Resize(dims);
         auto am_output_data = amOutput->mutable_data<float>();
         mel_handle->CopyFromCpu(am_output_data);
+    }
+
+    virtual std::unique_ptr<const Tensor> RunVocoder() override {
         vocoder_predictor_->Run();
 
         // 获取输出Tensor
@@ -171,10 +213,6 @@ public:
 
     virtual void SaveFloatWav(float *floatWav, int64_t size) override;
 
-    virtual bool IsLoaded() override {
-        return acoustic_model_predictor_ != nullptr && vocoder_predictor_ != nullptr;
-    }
-
     virtual float GetInferenceTime() override {
         return inference_time_;
     }
@@ -189,7 +227,7 @@ public:
 
     // 获取WAV持续时间（单位：毫秒）
     virtual float GetWavDuration() override {
-        return static_cast<float>(GetWavSize()) / sizeof(WavDataType) / static_cast<float>(wav_sample_rate_) * 1000;
+        return static_cast<float>(wav_.size()) / static_cast<float>(wav_sample_rate_) * 1000.0f;
     }
 
     // 获取RTF（合成时间 / 音频时长）

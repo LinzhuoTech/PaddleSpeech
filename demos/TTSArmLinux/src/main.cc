@@ -1,5 +1,7 @@
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <map>
@@ -14,11 +16,37 @@ using namespace paddle::lite_api;
 DEFINE_string(sentence, "你好，欢迎使用语音合成服务", "Text to be synthesized (Chinese only. English will crash the program.)");
 DEFINE_string(front_conf, "./front.conf", "Front configuration file");
 DEFINE_string(acoustic_model, "./models/cpu/fastspeech2_csmsc_arm.nb", "Acoustic model .nb file");
-DEFINE_string(vocoder, "./models/cpu/fastspeech2_csmsc_arm.nb", "vocoder .nb file");
+DEFINE_string(phone_id_data_type, "int64", "Input 0 data type of acoustic model: int32, int64 or float");
+DEFINE_string(speaker_ids, "", "Comma-separated speaker ids (Example: \"1,2,3\". Leave blank if the model does not have this parameter. Parameters that do not match the model may crash the program.)");
+DEFINE_string(speaker_id_data_type, "int64", "Input 1 data type of acoustic model: int32, int64 or float");
+DEFINE_string(vocoder, "./models/cpu/mb_melgan_csmsc_arm.nb", "vocoder .nb file");
 DEFINE_string(output_wav, "./output/tts.wav", "Output WAV file");
 DEFINE_string(wav_bit_depth, "16", "WAV bit depth, 16 (16-bit PCM) or 32 (32-bit IEEE float)");
 DEFINE_string(wav_sample_rate, "24000", "WAV sample rate, should match the output of the vocoder");
 DEFINE_string(cpu_thread, "1", "CPU thread numbers");
+
+template <typename T>
+std::vector<T> splitStringToInts(const std::string &input, char delimiter) {
+    std::istringstream iss(input);
+    std::vector<T> result;
+    std::string token;
+
+    while (std::getline(iss, token, delimiter)) {
+        T value = std::stoi(token);
+        result.push_back(value);
+    }
+
+    return result;
+}
+
+template <typename T>
+std::vector<T> vectorT(const std::vector<int32_t> input) {
+    std::vector<T> output(input.size());
+    std::transform(input.begin(), input.end(), output.begin(), [](int x) {
+        return static_cast<T>(x);
+    });
+    return output;
+}
 
 int main(int argc, char *argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -58,8 +86,8 @@ int main(int argc, char *argv[]) {
 
     std::string s_sentence;
     std::vector<std::wstring> sentence_part;
-    std::vector<int> phoneids = {};
-    std::vector<int> toneids = {};
+    std::vector<int> phoneIds = {};
+    std::vector<int> toneIds = {};
 
     // 根据标点进行分句
     LOG(INFO) << "Start to segment sentences by punctuation";
@@ -75,14 +103,14 @@ int main(int argc, char *argv[]) {
         s_sentence = ppspeech::wstring2utf8string(sentence_part[i]);
         LOG(INFO) << "After normalization sentence is: " << s_sentence;
         
-        if (0 != front_inst->GetSentenceIds(s_sentence, phoneids, toneids)) {
-            LOG(ERROR) << "TTS inst get sentence phoneids and toneids failed";
+        if (0 != front_inst->GetSentenceIds(s_sentence, phoneIds, toneIds)) {
+            LOG(ERROR) << "TTS inst get sentence phoneIds and toneIds failed";
             return -1;
         }
             
     }
-    LOG(INFO) << "The phoneids of the sentence is: " << limonp::Join(phoneids.begin(), phoneids.end(), " ");
-    LOG(INFO) << "The toneids of the sentence is: " << limonp::Join(toneids.begin(), toneids.end(), " ");
+    LOG(INFO) << "The phoneIds of the sentence is: " << limonp::Join(phoneIds.begin(), phoneIds.end(), " ");
+    LOG(INFO) << "The toneIds of the sentence is: " << limonp::Join(toneIds.begin(), toneIds.end(), " ");
     LOG(INFO) << "Get the phoneme id sequence of each sentence successfully";
  
 
@@ -104,10 +132,36 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    std::vector<int64_t> phones(phoneids.size());
-    std::transform(phoneids.begin(), phoneids.end(), phones.begin(), [](int x) { return static_cast<int64_t>(x); });
+    // 模型可能要求使用不同类型的传入参数
+    if (FLAGS_phone_id_data_type == "int32") {
+        predictor->SetAcousticModelInput(0, phoneIds);
+    } else if (FLAGS_phone_id_data_type == "int64") {
+        predictor->SetAcousticModelInput(0, vectorT<int64_t>(phoneIds));
+    } else if (FLAGS_phone_id_data_type == "float") {
+        predictor->SetAcousticModelInput(0, vectorT<float>(phoneIds));
+    } else {
+        LOG(ERROR) << "Unsupported phone id data type: " << FLAGS_phone_id_data_type;
+        return -1;
+    }
 
-    if (!predictor->RunModel(phones)) {
+    // 说话者id，如果为空则不设置（有的模型可能没有该参数）
+    if (!FLAGS_speaker_ids.empty()) {
+        std::vector<int32_t> speakerIds = splitStringToInts<int32_t>(FLAGS_speaker_ids, ',');
+
+        // 模型可能要求使用不同类型的传入参数
+        if (FLAGS_speaker_id_data_type == "int32") {
+            predictor->SetAcousticModelInput(1, speakerIds);
+        } else if (FLAGS_speaker_id_data_type == "int64") {
+            predictor->SetAcousticModelInput(1, vectorT<int64_t>(speakerIds));
+        } else if (FLAGS_speaker_id_data_type == "float") {
+            predictor->SetAcousticModelInput(1, vectorT<float>(speakerIds));
+        } else {
+            LOG(ERROR) << "Unsupported speaker id data type: " << FLAGS_speaker_id_data_type;
+            return -1;
+        }
+    }
+
+    if (!predictor->RunModel()) {
         LOG(ERROR) << "predictor run model failed" << std::endl;
         return -1;
     }
