@@ -24,6 +24,7 @@ DEFINE_string(output_wav, "./output/tts.wav", "Output WAV file");
 DEFINE_string(wav_bit_depth, "16", "WAV bit depth, 16 (16-bit PCM) or 32 (32-bit IEEE float)");
 DEFINE_string(wav_sample_rate, "24000", "WAV sample rate, should match the output of the vocoder");
 DEFINE_string(cpu_thread, "1", "CPU thread numbers");
+DEFINE_string(cpu_power_mode, "0", "CPU power mode: 0 HIGH, 1 LOW, 2 FULL, 3 NO_BIND, 4 RAND_HIGH, 5 RAND_LOW");
 
 template <typename T>
 std::vector<T> vectorT(const std::vector<int32_t> input) {
@@ -122,7 +123,13 @@ int main(int argc, char *argv[]) {
     const int cpuThreadNum = std::stol(FLAGS_cpu_thread);
 
     // CPU电源模式
-    const PowerMode cpuPowerMode = PowerMode::LITE_POWER_HIGH;
+    //   LITE_POWER_HIGH      = 0
+    //   LITE_POWER_LOW       = 1
+    //   LITE_POWER_FULL      = 2
+    //   LITE_POWER_NO_BIND   = 3
+    //   LITE_POWER_RAND_HIGH = 4
+    //   LITE_POWER_RAND_LOW  = 5
+    const PowerMode cpuPowerMode = static_cast<paddle::lite_api::PowerMode>(std::atoi(FLAGS_cpu_power_mode.c_str()));
 
     if (!predictor->Init(FLAGS_acoustic_model, FLAGS_vocoder, cpuPowerMode, cpuThreadNum, wavSampleRate)) {
         LOG(ERROR) << "predictor init failed";
