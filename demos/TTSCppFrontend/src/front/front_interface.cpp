@@ -331,6 +331,13 @@ int FrontEngineInterface::Cut(const std::string &sentence, std::vector<std::pair
     // 结巴分词
     _jieba->Tag(sentence, cut_result_jieba);
 
+    // 把全字母词标记为英文
+    for (size_t i = 0; i < cut_result_jieba.size(); i++) {
+        if (absl::c_all_of(absl::StripAsciiWhitespace(cut_result_jieba[i].first), absl::ascii_isalpha) && cut_result_jieba[i].second != "eng") {
+            cut_result_jieba[i].second = "eng";
+        }
+    }
+
     // 对分词后结果进行整合
     if (0 != MergeforModify(cut_result_jieba, cut_result)) {
         LOG(ERROR) << "Failed to modify  for word segmentation result.";
