@@ -10,13 +10,13 @@ source ${MAIN_ROOT}/utils/parse_options.sh || exit 1
 
 if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
     python3 ${MAIN_ROOT}/paddlespeech/t2s/exps/fastspeech2/gen_gta_mel.py \
-        --fastspeech2-config=fastspeech2_nosil_baker_ckpt_0.4/default.yaml \
-        --fastspeech2-checkpoint=fastspeech2_nosil_baker_ckpt_0.4/snapshot_iter_76000.pdz \
-        --fastspeech2-stat=fastspeech2_nosil_baker_ckpt_0.4/speech_stats.npy \
+        --fastspeech2-config=fastspeech2_nosil_aishell3_ckpt_0.4/default.yaml \
+        --fastspeech2-checkpoint=fastspeech2_nosil_aishell3_ckpt_0.4/snapshot_iter_76000.pdz \
+        --fastspeech2-stat=fastspeech2_nosil_aishell3_ckpt_0.4/speech_stats.npy \
         --dur-file=durations.txt \
         --output-dir=dump_finetune \
-        --phones-dict=fastspeech2_nosil_baker_ckpt_0.4/phone_id_map.txt \
-        --dataset=baker \
+        --phones-dict=fastspeech2_nosil_aishell3_ckpt_0.4/phone_id_map.txt \
+        --dataset=aishell3 \
         --rootdir=~/datasets/BZNSYP/
 fi
 
