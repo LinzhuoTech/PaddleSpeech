@@ -7,14 +7,14 @@ cd "$(dirname "$0")"
 source path.sh
 
 gpus=0
-stage=0
+stage=2
 stop_stage=100
 
 datasets_root_dir=/parent/work/tts/datasets
 mfa_root_dir=./mfa_results/
 conf_path=conf/default.yaml
 train_output_path=exp/default
-ckpt_name=snapshot_iter_99200.pdz
+ckpt_name=snapshot_iter_1144455.pdz
 
 
 # with the following command, you can choose the stage range you want to run
