@@ -1,13 +1,16 @@
 #!/bin/bash
 
 set -e
+set -x
+
+cd "$(dirname "$0")"
 source path.sh
 
-gpus=0,1
+gpus=0
 stage=0
 stop_stage=100
 
-datasets_root_dir=~/datasets
+datasets_root_dir=/parent/work/tts/datasets
 mfa_root_dir=./mfa_results/
 conf_path=conf/default.yaml
 train_output_path=exp/default

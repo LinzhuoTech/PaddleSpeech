@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -e
+set -x
+
 stage=0
 stop_stage=100
 
@@ -8,13 +11,13 @@ datasets_root_dir=$2
 mfa_root_dir=$3
 
 # 1. get durations from MFA's result
-if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
-    echo "Generate durations_baker.txt from MFA results ..."
-    python3 ${MAIN_ROOT}/utils/gen_duration_from_textgrid.py \
-        --inputdir=${mfa_root_dir}/baker_alignment_tone \
-        --output durations_baker.txt \
-        --config=${config_path}
-fi
+#if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
+#    echo "Generate durations_baker.txt from MFA results ..."
+#    python3 ${MAIN_ROOT}/utils/gen_duration_from_textgrid.py \
+#        --inputdir=${mfa_root_dir}/baker_alignment_tone \
+#        --output durations_baker.txt \
+#        --config=${config_path}
+#fi
 
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     echo "Generate durations_ljspeech.txt from MFA results ..."
@@ -42,23 +45,23 @@ fi
 
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
     # concat duration file
-    echo "concat durations_baker.txt, durations_ljspeech.txt, durations_aishell3.txt and durations_vctk.txt to durations.txt"
-    cat durations_baker.txt durations_ljspeech.txt durations_aishell3.txt durations_vctk.txt > durations.txt
+    echo "concat durations_ljspeech.txt, durations_aishell3.txt and durations_vctk.txt to durations.txt"
+    cat durations_ljspeech.txt durations_aishell3.txt durations_vctk.txt > durations.txt
 fi
 
 # 2. extract features
-if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
-    echo "Extract baker features ..."
-    python3 ${BIN_DIR}/preprocess.py \
-        --dataset=baker \
-        --rootdir=${datasets_root_dir}/BZNSYP/ \
-        --dumpdir=dump \
-        --dur-file=durations.txt \
-        --config=${config_path} \
-        --num-cpu=20 \
-        --cut-sil=True \
-        --write_metadata_method=a
-fi
+#if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
+#    echo "Extract baker features ..."
+#    python3 ${BIN_DIR}/preprocess.py \
+#        --dataset=baker \
+#        --rootdir=${datasets_root_dir}/BZNSYP/ \
+#        --dumpdir=dump \
+#        --dur-file=durations.txt \
+#        --config=${config_path} \
+#        --num-cpu=20 \
+#        --cut-sil=True \
+#        --write_metadata_method=a
+#fi
 
 if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
     echo "Extract ljspeech features ..."
