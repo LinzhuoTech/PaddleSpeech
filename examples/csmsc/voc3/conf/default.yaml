@@ -87,7 +87,7 @@ lambda_adv: 2.5            # Loss balancing coefficient for adversarial loss.
 ###########################################################
 batch_size: 64             # Batch size.
 batch_max_steps: 16200     # Length of each audio in batch. Make sure dividable by n_shift.
-num_workers: 2             # Number of workers in DataLoader.
+num_workers: 1             # Number of workers in DataLoader.
 
 ###########################################################
 #             OPTIMIZER & SCHEDULER SETTING               #
@@ -134,5 +134,5 @@ eval_interval_steps: 1000               # Interval steps to evaluate the network
 ###########################################################
 #                     OTHER SETTING                       #
 ###########################################################
-num_snapshots: 10                 # max number of snapshots to keep while training
+num_snapshots: 100                 # max number of snapshots to keep while training
 seed: 42                          # random seed for paddle, random, and np.random
