@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 source path.sh
 
 gpus=0
-stage=2
+stage=0
 stop_stage=100
 
 datasets_root_dir=/parent/work/tts/datasets

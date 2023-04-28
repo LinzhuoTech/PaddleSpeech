@@ -5,12 +5,12 @@ set -e
 source path.sh
 
 gpus=0
-stage=4
-stop_stage=4
+stage=0
+stop_stage=100
 
 conf_path=conf/default.yaml
 train_output_path=exp/default
-ckpt_name=snapshot_iter_80000.pdz
+ckpt_name=snapshot_iter_325000.pdz
 
 # with the following command, you can choose the stage range you want to run
 # such as `./run.sh --stage 0 --stop-stage 0`
@@ -33,9 +33,9 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
 fi
 
 # PTQ_static
-if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
-    CUDA_VISIBLE_DEVICES=${gpus} ./local/PTQ_static.sh  ${train_output_path} mb_melgan_csmsc || exit -1
-fi
+#if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
+#    CUDA_VISIBLE_DEVICES=${gpus} ./local/PTQ_static.sh  ${train_output_path} mb_melgan_csmsc || exit -1
+#fi
 
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
     # synthesize
