@@ -85,7 +85,7 @@ lambda_adv: 2.5            # Loss balancing coefficient for adversarial loss.
 ###########################################################
 #                  DATA LOADER SETTING                    #
 ###########################################################
-batch_size: 64             # Batch size.
+batch_size: 48             # Batch size.
 batch_max_steps: 16200     # Length of each audio in batch. Make sure dividable by n_shift.
 num_workers: 1             # Number of workers in DataLoader.
 
